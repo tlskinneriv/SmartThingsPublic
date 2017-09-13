@@ -44,10 +44,11 @@ def page1() {
                 // get the solar data
                 input (name: "solarSelect", type: "enum", title: "At sunset/sunrise?", multiple: false, options: ["Sunset", "Sunrise"],
                 	required: true, submitOnChange: true)
+                if (solarSelect) input (name: "solarSelect_offset", type: "number", title: solarSelect + " offset +/- minutes", required: false)
                 
                 // if action at sunrise/sunset and back off at opposite
                 if (solarSelect && !solarSelect_specificTime && !solarSelect_amountTime) {
-                	input (name: "solarSelect_offset", type: "number", title: solarSelect + " offset +/- minutes", required: false)
+                	
                     def solarSelect_opposite_mode = (solarSelect == "Sunset") ? "sunrise" : "sunset"
                     input (name: "solarSelect_opposite", type: "bool", title: "Also '" + switchesAction_opposite + "' at " + solarSelect_opposite_mode + "?",
                     	required: false, submitOnChange: true)
