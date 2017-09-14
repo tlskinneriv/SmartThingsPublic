@@ -93,7 +93,7 @@ def page2() {
         section {
             // when in what mode
             paragraph "When home enters 'pause' mode(s) the app will perform the action '" + state.theDevices_actionOpposite + 
-            	"'. When home enters 'pause' mode(s) the app will perform the action '" + theDevices_actionRegular + "' if it was previously scheduled to do so." 
+            	"'. When home enters 'resume' mode(s) the app will perform the action '" + state.theDevices_actionRegular + "' if it was previously scheduled to do so." 
             if ( modeSelect_resume ) input (name: "modeSelect_pause", type: "mode", title: "Pause schedule in these modes", multiple: true, required: true, submitOnChange: true)
             else input (name: "modeSelect_pause", type: "mode", title: "Pause schedule in these modes", multiple: true, required: false, submitOnChange: true)
             if ( modeSelect_pause ) input (name: "modeSelect_resume", type: "mode", title: "Resume schedule in these modes", multiple: true, required: true, submitOnChange: true)
