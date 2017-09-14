@@ -24,72 +24,76 @@ definition(
     iconX3Url: "https://s3.amazonaws.com/smartapp-icons/Convenience/Cat-Convenience@2x.png")
 
 preferences {
-	page(name: "page1", nextPage: "page2", title: "What to control...", install: false, uninstall: true)
-    page(name: "page2", title: "Schedule Exceptions", install: true, uninstall: true)
+	page(name: "page1", nextPage: "page2", title: "What and When", install: false, uninstall: true)
+    page(name: "page2", nextPage: "pageLast", title: "Schedule Exceptions", uninstall: false)
+    page(name: "pageLast", title: "Advanced Options", install: true, uninstall: false) {
+    	section([mobileOnly:true]) {
+            label title: "Assign a name", required: false
+    	}
+	}
+    
 }
 
+// devices and options dynamic page
 def page1() {
 	dynamicPage(name: "page1") {
     	section {
-        	// show the input for switches always
-        	input (name: "theSwitches", type: "capability.switch", multiple:true, title: "Which switches/lights do you want to control?",
-            	required: true)
-			input (name: "switchesAction", type: "enum", title: "What do you want to do?", options: ["Turn On","Turn Off"],
-				required: true, submitOnChange: true)
-            if (switchesAction) {
-            	// find out what is opposite for switch
-                def switchesAction_opposite = (switchesAction == "Turn On") ? "Turn Off" : "Turn On"
-                state.switchesAction = switchesAction
-                state.switchesAction_opposite = switchesAction_opposite
-                // get the solar data
-                input (name: "solarSelect", type: "enum", title: "At sunset/sunrise?", multiple: false, options: ["Sunset", "Sunrise"],
+        	// define device capability and type
+            def capability = "switch"
+            state.deviceType = "switch"
+            
+            // get the devices
+        	input (name: "theDevices", type: "capability." + capability, multiple:true, title: "Which devices do you want to control?",
+            	required: true, submitOnChange: true)
+            
+            // get the actions and triggers
+            if ( theDevices )
+            {
+                // get the regular action
+                input (name: "theDevices_actionRegular", type: "enum", title: "What do you want to do?", options: deviceActions(state.deviceType),
+                    defaultValue: deviceActionsDefault(state.deviceType), required: true, submitOnChange: true)
+                
+                // store the regular action so we can reference it in other pages
+                state.theDevices_actionRegular = theDevices_actionRegular
+                // store the opposite action so we can reference it in other pages
+                state.theDevices_actionOpposite = deviceActionsOpposite(state.deviceType, theDevices_actionRegular)
+                
+                // get the regular trigger
+                input (name: "theDevices_triggerRegular", type: "enum", title: "Select trigger", options: triggerOptions(),
                 	required: true, submitOnChange: true)
-                if (solarSelect) input (name: "solarSelect_offset", type: "number", title: solarSelect + " offset +/- minutes", required: false)
                 
-                // if action at sunrise/sunset and back off at opposite
-                if (solarSelect && !solarSelect_specificTime && !solarSelect_amountTime) {
-                	
-                    def solarSelect_opposite_mode = (solarSelect == "Sunset") ? "sunrise" : "sunset"
-                    input (name: "solarSelect_opposite", type: "bool", title: "Also '" + switchesAction_opposite + "' at " + solarSelect_opposite_mode + "?",
-                    	required: false, submitOnChange: true)
-                    if (solarSelect_opposite)
-                    {
-                    	input (name: "solarSelect_opposite_offset", type: "number", title: solarSelect_opposite_mode.capitalize() + " offset +/- minutes", required: false)
-					}
-            	}
-                
-                // if action at sunrise/sunset and back off after amount of time
-                if (solarSelect && !solarSelect_specificTime && !solarSelect_opposite) {
-                    input (name: "solarSelect_amountTime", type: "bool", title: "Also '" + switchesAction_opposite + "' after an amount of time?",
-                    	required: false, submitOnChange: true)
-                    if (solarSelect_amountTime)
-                    {
-                    	paragraph "The minimum amount of time for this offset is 5 minutes regardless of what values are input below"
-                        input (name: "solarSelect_amountTime_hours", type: "number", title: "Hours", required: false)
-                        input (name: "solarSelect_amountTime_minutes", type: "number", title: "Minutes", required: false)
-					}
-            	}
-                
-                // if action at sunrise/sunset and back off at specific time
-                if (solarSelect && !solarSelect_opposite && !solarSelect_amountTime) {
-                    input (name: "solarSelect_specificTime", type: "bool", title: "Also '" + switchesAction_opposite + "' at a specific time?",
-                    	required: false, submitOnChange: true)
-                    if (solarSelect_specificTime)
-                    {
-                    	input (name: "solarSelect_specificTime_time", type: "time", title: "Time", required: true)
-					}
-            	}
-        	}
+                // get the regular trigger options
+                if ( theDevices_triggerRegular ) {
+                	// render the trigger options after selected
+                    renderTriggerOptions(theDevices_triggerRegular, "regular")
+                    
+                    // offer another action that is not the selected trigger only if one other option
+                    def userString = "Also '" + state.theDevices_actionOpposite + "' with a different trigger?"
+                    input (name: "theDevices_oppositeEnable", type: "bool", title: userString, required: false, submitOnChange: true)
+                    
+                    // get the opposite trigger
+                    if ( theDevices_oppositeEnable ) {
+                        def oppositeTriggers = triggerOptionsOpposite(theDevices_triggerRegular)
+                        input (name: "theDevices_triggerOpposite", type: "enum", title: "Select trigger", options: oppositeTriggers,
+                               required: true, submitOnChange: true)
+                        if ( theDevices_triggerOpposite ) {
+                            // render the trigger options after selected
+                            renderTriggerOptions(theDevices_triggerOpposite, "opposite")
+                        }
+                    }
+                }
+			}
 		}
     }
 }
 
+// schedule exceptions dynamic page
 def page2() {
 	dynamicPage(name: "page2") {
         section {
             // when in what mode
-            paragraph "When home enters 'pause' mode(s) the app will perform the action '" + state.switchesAction_opposite + 
-            	"'. When home enters 'pause' mode(s) the app will perform the action '" + state.switchesAction + "' if it was previously scheduled to do so." 
+            paragraph "When home enters 'pause' mode(s) the app will perform the action '" + state.theDevices_actionOpposite + 
+            	"'. When home enters 'pause' mode(s) the app will perform the action '" + theDevices_actionRegular + "' if it was previously scheduled to do so." 
             if ( modeSelect_resume ) input (name: "modeSelect_pause", type: "mode", title: "Pause schedule in these modes", multiple: true, required: true, submitOnChange: true)
             else input (name: "modeSelect_pause", type: "mode", title: "Pause schedule in these modes", multiple: true, required: false, submitOnChange: true)
             if ( modeSelect_pause ) input (name: "modeSelect_resume", type: "mode", title: "Resume schedule in these modes", multiple: true, required: true, submitOnChange: true)
@@ -100,49 +104,192 @@ def page2() {
 
 def installed() {
 	log.debug "Installed with settings: ${settings}"
-
 	initialize()
 }
 
 def updated() {
 	log.debug "Updated with settings: ${settings}"
-
+	//remove any previously scheduled tasks
+    unschedule()
 	unsubscribe()
 	initialize()
 }
 
 def initialize() {
-	// TODO: subscribe to attributes, devices, locations, etc.
-    subscribe(theSwitches, "switch", switchHandler)
-	subscribe(location, "mode", modeChangeHandler)
+    subscribe(theDevices, state.deviceType, deviceChangeHandler)
     subscribe(location, "sunsetTime", sunsetTimeHandler)
     subscribe(location, "sunriseTime", sunriseTimeHandler)
-    state.switchScheduledRegular = false
-	state.switchPaused = false
-    // schedules switch to execute regular action at specified solar event
-    scheduleSwitchAction_solar(location.currentValue(solarSelect.toLowerCase() + "Time"), false, solarSelect_offset)
-    // schedules switch to execute opposite action at opposite specified solar event
-	if ( solarSelect_opposite ) {
-		def solarSelect_opposite_value = ( solarSelect == "Sunset" ? "Sunrise" : "Sunset" )
-		scheduleSwitchAction_solar(location.currentValue(solarSelect_opposite_value.toLowerCase() + "Time"), true, solarSelect_opposite_offset)
-	}
-    // schedules switch to execute opposite action at at a specific time
-    else if ( solarSelect_specificTime ) {
-        scheduleSwitchAction_specific(solarSelect_specificTime_time, true)
-    }
-    // schedules switch to execute opposite action after an amount of time
-    else if ( solarSelect_amountTime ) {
-    	def hours = solarSelect_amountTime_hours ? solarSelect_amountTime_hours : 0
-        def minutes = solarSelect_amountTime_mins ? solarSelect_amountTime_mins : 0
-        state.amountTime_offset = (hours) * 60 + minutes
-        state.amountTime_offset = (offset < 5) ? 5 : state.amountTime_offset // minimum 5 minute offset
-    	scheduleSwitchAction_solar(location.currentValue(solarSelect.toLowerCase() + "Time"), true, state.amountTime_offset )
+    if ( modeSelect_resume && modeSelect_pause ) subscribe(location, "mode", modeChangeHandler)
+    
+    state.deviceTriggeredRegular = false
+	state.deviceSchedulePaused = false
+    
+    processTrigger(theDevices_triggerRegular, "regular")
+    if ( theDevices_oppositeEnable ) processTrigger(theDevices_triggerOpposite, "opposite")
+}
+
+/********** Page Rendering **********/
+
+// gets device options for specific device types
+private deviceActions(deviceType) {
+	switch(deviceType) {
+    	case "switch":
+        	return ["Turn On","Turn Off"]
+    	default:
+        	return ["UNDEFINED"]
     }
 }
 
-// TODO: implement event handlers
+// gets device options that are not the options provided
+private deviceActionsOpposite(deviceType, option) {
+	def allOptions = deviceActions(deviceType)
+    allOptions = allOptions.findAll { it != option }
+    return allOptions[0]
+}
 
-def switchHandler(evt) {
+// gets default device option
+private deviceActionsDefault(deviceType) {
+	switch(deviceType) {
+    	case "switch":
+        	return "Turn On"
+    	default:
+        	return null
+    }
+}
+
+// lists available triggers
+private triggerOptions() {
+	def triggers = [
+    	"At Sunset",
+        "At Sunrise",
+        "At a Specific Time"
+    ]
+    return triggers.sort()
+}
+
+// lists trigger options that are not the trigger provided
+private triggerOptionsOpposite(trigger) {
+	// get all options
+    def allOptions = triggerOptions()
+    // list options that cannot be duplicated on a device
+    def nonDuplicateTriggers = [
+    	"At Sunset",
+        "At Sunrise"
+    ]
+    // list options that can only be used after the initial trigger
+    def postTriggers = [
+    	"After an Amount of Time"
+    ]
+    // process inputted trigger
+    if (nonDuplicateTriggers.contains(trigger)) allOptions = allOptions.findAll { it != trigger }
+    allOptions = allOptions + postTriggers
+    allOptions = allOptions.sort()
+    return allOptions
+}
+
+// renders trigger options for specific triggers
+private renderTriggerOptions(trigger, nameSuffix) {
+	def triggerSuffix = (nameSuffix.toLowerCase()).capitalize()
+    def triggerPrefix = "theDevices_trigger" + triggerSuffix + "_"
+    switch (trigger) {
+    	case "At Sunrise":
+        	// show sunset options
+            input (name: triggerPrefix + "offset", type: "number", title: "Sunrise offset +/- minutes", required: false)
+            break
+        case "At Sunset":
+        	// show sunrise options
+            input (name: triggerPrefix + "offset", type: "number", title: "Sunset offset +/- minutes", required: false)
+            break
+        case "At a Specific Time":
+        	// show specific time options
+            input (name: triggerPrefix + "time", type: "time", title: "Time", required: true)
+            break
+        case "After an Amount of Time":
+        	// show after an amount of time options
+            paragraph "The minimum amount of time for this offset is 5 minutes regardless of what values are input below."
+            input (name: triggerPrefix + "hours", type: "number", title: "Hours", required: false)
+            input (name: triggerPrefix + "mins", type: "number", title: "Minutes", required: false)
+            break
+        default:
+        	paragraph "This trigger's options are not currently defined."
+    }
+}
+
+/********** Process Triggers **********/
+
+def processTriggerRegular(triggerRegular) {
+	def triggerPrefix = "theDevices_triggerRegular_"
+    log.debug "Initializing regular trigger '$triggerRegular'"
+    switch (triggerRegular) {
+    	case "At Sunset":
+        	// do sunset init
+            log.debug "init trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
+            scheduleDeviceAction(location.currentValue("sunsetTime"), false, false, settings."${triggerPrefix}offset")
+            break
+        case "At Sunrise":
+        	// do sunrise init
+            log.debug "init trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
+            scheduleDeviceAction(location.currentValue("sunriseTime"), false, false, settings."${triggerPrefix}offset")
+            break
+        case "At a Specific Time":
+        	// do specific time init
+            log.debug "init trigger option ${triggerPrefix}time is ${settings."${triggerPrefix}time"}"
+            scheduleDeviceAction(settings."${triggerPrefix}time", true, false)
+            break
+        default:
+        	log.debug "No definition for trigger ${triggerRegular}"
+    }
+}
+
+def processTrigger(trigger, nameSuffix) {
+	def triggerSuffix = (nameSuffix.toLowerCase()).capitalize()
+    def triggerPrefix = "theDevices_trigger" + triggerSuffix + "_"
+    log.debug "Initializing $nameSuffix trigger '$trigger'"
+    switch (trigger) {
+    	case "At Sunset":
+        	// do sunset init
+            log.debug "---- trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
+        	// schedule once at sunset
+            scheduleDeviceAction(location.currentValue("sunsetTime"), false, (nameSuffix == "opposite"), settings."${triggerPrefix}offset")
+            // store scheduled time in state
+            break
+        case "At Sunrise":
+        	// do sunrise init
+            log.debug "---- trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}" 
+			// schedule once at sunrise
+            scheduleDeviceAction(location.currentValue("sunriseTime"), false, (nameSuffix == "opposite"), settings."${triggerPrefix}offset")
+            break
+        case "At a Specific Time":
+        	// do specific time init
+            log.debug "---- trigger option ${triggerPrefix}time is ${settings."${triggerPrefix}time"}"
+            // schedule daily at this time
+            scheduleDeviceAction(settings."${triggerPrefix}time", true, (nameSuffix == "opposite"))
+            break
+        case "After an Amount of Time":
+        	// POST ACTION ONLY
+            // do after amount of time init
+            log.debug "---- trigger option ${triggerPrefix}hours is ${settings."${triggerPrefix}hours"}"
+            log.debug "---- trigger option ${triggerPrefix}mins is ${settings."${triggerPrefix}mins"}"
+            // schedule once at regular scheduled time + offset defined in settings
+            def offset = getOffsetFromTrigger ( settings."${triggerPrefix}hours", settings."${triggerPrefix}mins" )
+            scheduleDeviceAction(state.regularActionScheduledTime, false, (nameSuffix == "opposite"), offset)
+            break
+        default:
+        	log.debug "No definition for trigger ${trigger}"
+    }
+}
+
+private getOffsetFromTrigger ( triggerOffsetHours, triggerOffsetMins, minimumEnabled = true ) {
+	def hours = (triggerOffsetHours && triggerOffsetHours >= 0 ) ? triggerOffsetHours : 0
+    def minutes = (triggerOffsetMins && triggerOffsetMins >= 0 ) ? triggerOffsetMins : 0
+    def offset = (hours) * 60 + minutes
+    offset = (offset < 5 && minimumEnabled) ? 5 : offset // minimum 5 minute offset
+    return offset
+}
+
+/********** Event Handlers **********/
+
+def deviceChangeHandler(evt) {
 	log.debug "Switch ${evt.displayName} turned ${evt.stringValue}."
 }
 
@@ -151,85 +298,155 @@ def modeChangeHandler(evt) {
     // if in the mode we want to ensure regular action happens
     if (settings.modeSelect_resume.contains(location.mode)) {
     	// only make it happen if it was already supposed to
-        state.switchPaused = false
         log.debug "Resuming the schedule..."
-        if ( state.switchScheduledRegular ) doSwitchAction_regular()
+        state.deviceSchedulePaused = false
+        if ( state.deviceTriggeredRegular ) doDeviceAction_regular()
     }
     else if (settings.modeSelect_pause.contains(location.mode)) {
-        doSwitchAction_opposite()
         log.debug "Pausing the schedule..."
-        state.switchPaused = true
+        doDeviceAction_opposite()
+        state.deviceSchedulePaused = true
     }
 }
 
 def sunsetTimeHandler(evt) {
-	// if we want regular state after sunset
-    if ( solarSelect == "Sunset" ) {
-    	scheduleSwitchAction_solar(evt.value)
-        if ( solarSelect_amountTime ) {
-    		scheduleSwitchAction_solar(evt.value, true, state.amountTime_offset )
-    	}
-	}
-    // if we want opposite state after sunset
-    else if ( solarSelect_opposite ) {
-    	scheduleSwitchAction_solar(evt.value, true)
+    // check both triggers and set as needed
+    if ( theDevices_triggerRegular == "At Sunset" ) {
+    	def triggerPrefix = "theDevices_triggerRegular_"
+        log.debug "Resetting regular trigger at sunrise"
+        log.debug "---- trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
+    	// schedule once at sunset
+    	scheduleDeviceAction(evt.value, false, false, settings."${triggerPrefix}offset")
+        resetAmountOfTimeTrigger()
+    }
+    if ( theDevices_triggerOpposite == "At Sunset" ) {
+    	def triggerPrefix = "theDevices_triggerOpposite_"
+        log.debug "Resetting opposite trigger at sunrise"
+        log.debug "---- trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
+    	// schedule once at sunset
+    	scheduleDeviceAction(evt.value, false, true, settings."${triggerPrefix}offset")
     }
 }
 
 def sunriseTimeHandler(evt) {
-	// if we want regular state after sunset
-    if ( solarSelect == "Sunrise" ) {
-    	scheduleSwitchAction_solar(evt.value)
-        if ( solarSelect_amountTime ) {
-    		scheduleSwitchAction_solar(evt.value, true, state.amountTime_offset )
-    	}
-	}
-    // if we want opposite state after sunset
-    else if ( solarSelect_opposite ) {
-    	scheduleSwitchAction_solar(evt.value, true)
+	// check both triggers and set as needed
+    if ( theDevices_triggerRegular == "At Sunrise" ) {
+    	def triggerPrefix = "theDevices_triggerRegular_"
+        log.debug "Resetting regular trigger at sunrise"
+        log.debug "---- trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
+    	// schedule once at sunrise
+    	scheduleDeviceAction(evt.value, false, false, settings."${triggerPrefix}offset")
+        resetAmountOfTimeTrigger()
+    }
+    if ( theDevices_triggerOpposite == "At Sunrise" ) {
+    	def triggerPrefix = "theDevices_triggerOpposite_"
+        log.debug "Resetting opposite trigger at sunrise"
+        log.debug "---- trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
+    	// schedule once at sunrise
+    	scheduleDeviceAction(evt.value, false, true, settings."${triggerPrefix}offset")
     }
 }
 
-def doSwitchAction_regular() {
+def resetAmountOfTimeTrigger () {
+	if ( theDevices_triggerOpposite == "After an Amount of Time" )
+    {
+        def triggerPrefix = "theDevices_triggerOpposite_"
+        log.debug "Resetting opposite trigger after an amount of time"
+        log.debug "---- trigger option ${triggerPrefix}hours is ${settings."${triggerPrefix}hours"}"
+        log.debug "---- trigger option ${triggerPrefix}mins is ${settings."${triggerPrefix}mins"}"
+        // schedule once at regular scheduled time + offset defined in settings
+        def offset = getOffsetFromTrigger ( settings."${triggerPrefix}hours", settings."${triggerPrefix}mins" )
+        scheduleDeviceAction(state.regularActionScheduledTime, false, true, offset)
+    }
+}
+
+/********** Device Action Handlers **********/
+// performs the regular action on the devices
+def doDeviceAction_regular() {
 	// do the regular action
-    log.debug "Doing the regular action on switches..."
-    if ( !state.switchPaused) (switchesAction == "Turn On") ? theSwitches.on() : theSwitches.off()
+    log.debug "Doing the regular action on devices"
+    if ( !state.deviceSchedulePaused ) 
+    	switch (state.deviceType) {
+        	case "switch": 
+            	performSwitchAction(state.theDevices_actionRegular)
+                break
+            default: log.debug "No action defined for device type"
+        }
 }
 
-def doSwitchAction_opposite() {
+// performs the opposite action on the devices
+def doDeviceAction_opposite() {
 	// do the opposite action
-    log.debug "Doing opposite action on switches..."
-    (switchesAction == "Turn On") ? theSwitches.off() : theSwitches.on()
+    log.debug "Doing opposite action on the devices"
+    switch (state.deviceType) {
+        case "switch": 
+        	performSwitchAction(state.theDevices_actionOpposite)
+        	break
+        default: log.debug "No action defined for device type"
+    }
 }
 
-def doScheduledSwitchAction_regular() {
-	state.switchScheduledRegular = true
-    log.debug "Setting state.switchScheduledRegular to ${state.switchScheduledRegular}"
+// performs regular action on devices and marks that it is scheduled in regular mode by a trigger
+def doScheduledDeviceAction_regular() {
+	state.deviceTriggeredRegular = true
+    log.debug "Setting state.deviceTriggeredRegular to ${state.deviceTriggeredRegular}"
     log.debug "Doing scheduled regular action..."
-    doSwitchAction_regular()
+    doDeviceAction_regular()
 }
 
-def doScheduledSwitchAction_opposite() {
-	state.switchScheduledRegular = false
-    log.debug "Setting state.switchScheduledRegular to ${state.switchScheduledRegular}"
+// performs regular action on devices and marks that it is not scheduled in regular mode by a trigger
+def doScheduledDeviceAction_opposite() {
+	state.deviceTriggeredRegular = false
+    log.debug "Setting state.deviceTriggeredRegular to ${state.deviceTriggeredRegular}"
     log.debug "Doing scheduled opposite action..."
-    doSwitchAction_opposite()
+    doDeviceAction_opposite()
 }
 
-def scheduleSwitchAction_solar(timeString, opposite = false, offset = 0) {
+/********** Device Action Performers **********/
+// performs string actions for devices of type: switch
+def performSwitchAction(action) {
+	log.debug "action is $action"
+    if ( action == "Turn On" ) theDevices.on()
+    else theDevices.off()
+}
+
+/********** Schedulers **********/
+
+def scheduleDeviceAction(timeInput, daily = false, opposite = false, offset = 0) {
 	// ensure there is an offset
     if ( !offset ) { offset = 0 }
     // parse time from string and add the offset
-    def time = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timeString)
-    def timeWithOffset = new Date(time.time + (offset * 60 * 1000))
-    // schedule the appropriate action
-    if ( opposite ) { runOnce(timeWithOffset, doScheduledSwitchAction_opposite); log.debug "Scheduling opposite switch action for: $timeWithOffset" }
-    else { runOnce(timeWithOffset, doScheduledSwitchAction_regular); log.debug "Scheduling regular switch action for: $timeWithOffset" }
-}
-
-def scheduleSwitchAction_specific(timeString, opposite = false) {
-    // schedule the appropriate action
-    def time = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", timeString)
-    if ( opposite ) { schedule(timeString, doScheduledSwitchAction_opposite); log.debug "Scheduling opposite switch action for: ${time.format("HH:mm:ss z")} every day" }
-    else { schedule(timeString, doScheduledSwitchAction_regular); log.debug "Scheduling regular switch action for: ${time.format("HH:mm:ss z")} every day" }
+    def time = null
+    try { time = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSSZ", timeInput) } catch (all1) {
+    	try { time = Date.parse("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", timeInput) } catch (all2) { 
+        		time = timeInput
+            }
+    	}	
+    if ( time )
+    {
+        def timeWithOffset = new Date(time.time + (offset * 60 * 1000))
+        // schedule the appropriate action
+        if ( opposite ) { 
+        	if ( daily ) {
+            	schedule(timeWithOffset, doScheduledDeviceAction_opposite)
+                log.debug "Scheduling opposite device action for: ${time.format("HH:mm:ss z")} every day"
+            }
+            else {
+            	runOnce(timeWithOffset, doScheduledDeviceAction_opposite)
+            	log.debug "Scheduling opposite device action for: $timeWithOffset"
+            }
+        }
+        else { 
+        	// store the time for the regular action
+            state.regularActionScheduledTime = timeWithOffset
+        	if ( daily ) {
+            	schedule(timeWithOffset, doScheduledDeviceAction_regular)
+                log.debug "Scheduling regular device action for: ${time.format("HH:mm:ss z")} every day"
+            }
+            else {
+            	runOnce(timeWithOffset, doScheduledDeviceAction_regular)
+            	log.debug "Scheduling regular device action for: $timeWithOffset" 
+            } 
+        }
+    } else { log.debug "Could not parse time. Action not scheduled." }
 }
