@@ -217,30 +217,6 @@ private renderTriggerOptions(trigger, nameSuffix) {
 
 /********** Process Triggers **********/
 
-def processTriggerRegular(triggerRegular) {
-	def triggerPrefix = "theDevices_triggerRegular_"
-    log.debug "Initializing regular trigger '$triggerRegular'"
-    switch (triggerRegular) {
-    	case "At Sunset":
-        	// do sunset init
-            log.debug "init trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
-            scheduleDeviceAction(location.currentValue("sunsetTime"), false, false, settings."${triggerPrefix}offset")
-            break
-        case "At Sunrise":
-        	// do sunrise init
-            log.debug "init trigger option ${triggerPrefix}offset is ${settings."${triggerPrefix}offset"}"
-            scheduleDeviceAction(location.currentValue("sunriseTime"), false, false, settings."${triggerPrefix}offset")
-            break
-        case "At a Specific Time":
-        	// do specific time init
-            log.debug "init trigger option ${triggerPrefix}time is ${settings."${triggerPrefix}time"}"
-            scheduleDeviceAction(settings."${triggerPrefix}time", true, false)
-            break
-        default:
-        	log.debug "No definition for trigger ${triggerRegular}"
-    }
-}
-
 def processTrigger(trigger, nameSuffix) {
 	def triggerSuffix = (nameSuffix.toLowerCase()).capitalize()
     def triggerPrefix = "theDevices_trigger" + triggerSuffix + "_"
@@ -432,7 +408,7 @@ def scheduleDeviceAction(timeInput, daily = false, opposite = false, offset = 0)
                 log.debug "Scheduling opposite device action for: ${time.format("HH:mm:ss z")} every day"
             }
             else {
-            	runOnce(timeWithOffset, doScheduledDeviceAction_opposite)
+            	runOnce(timeWithOffset, doScheduledDeviceAction_opposite, [overwrite: false])
             	log.debug "Scheduling opposite device action for: $timeWithOffset"
             }
         }
@@ -444,7 +420,7 @@ def scheduleDeviceAction(timeInput, daily = false, opposite = false, offset = 0)
                 log.debug "Scheduling regular device action for: ${time.format("HH:mm:ss z")} every day"
             }
             else {
-            	runOnce(timeWithOffset, doScheduledDeviceAction_regular)
+            	runOnce(timeWithOffset, doScheduledDeviceAction_regular, [overwrite: false])
             	log.debug "Scheduling regular device action for: $timeWithOffset" 
             } 
         }
